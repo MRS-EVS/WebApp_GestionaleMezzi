@@ -1,0 +1,31 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37301.10 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MezziMRS.Api", "MezziMRS.Api.csproj", "{B1E7A4D2-6C3F-4E58-9A21-7D5C8F2B4E13}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MezziMRS.Core", "..\Core\MezziMRS.Core.csproj", "{4F9C2E81-3A6D-4B7C-8E15-2C9A6D3F8B04}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B1E7A4D2-6C3F-4E58-9A21-7D5C8F2B4E13}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B1E7A4D2-6C3F-4E58-9A21-7D5C8F2B4E13}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B1E7A4D2-6C3F-4E58-9A21-7D5C8F2B4E13}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B1E7A4D2-6C3F-4E58-9A21-7D5C8F2B4E13}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4F9C2E81-3A6D-4B7C-8E15-2C9A6D3F8B04}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4F9C2E81-3A6D-4B7C-8E15-2C9A6D3F8B04}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4F9C2E81-3A6D-4B7C-8E15-2C9A6D3F8B04}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4F9C2E81-3A6D-4B7C-8E15-2C9A6D3F8B04}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9E3D5B7A-1F42-4C86-B0D9-5A8E2F4C6D71}
+	EndGlobalSection
+EndGlobal

@@ -1,38 +1,29 @@
-# Dipendenze
-node_modules/
+## .NET build output
+bin/
+obj/
 
-# Build
-dist/
-dist-ssr/
-
-# Variabili d'ambiente — NON committare mai .env
-.env
-.env.local
-.env.*.local
-
-# Log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# Editor
-.vscode/
-.idea/
+## Visual Studio / Rider
+.vs/
+*.user
 *.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
 
-# OS
+## Frontend compilato (rigenerato con `npm run build` in web/) e pacchetto di publish
+Api/wwwroot/
+Api/publish/
+Api/publis/
+
+## Node
+node_modules/
+dev-dist/
+
+## Secrets — MAI committare
+Api/appsettings.json
+Api/appsettings.Development.json
+Api/appsettings.Production.json
+
+## Impostazioni locali degli strumenti
+.claude/
+
+## OS
 .DS_Store
 Thumbs.db
-
-# Cache Vite e PWA dev
-.vite/
-dev-dist/
-*.vite-plugin-mkcert/
-
-# Claude Code
-.claude/
