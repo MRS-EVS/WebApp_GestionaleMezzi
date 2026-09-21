@@ -54,6 +54,32 @@ public class PrenotazioniController : ControllerBase
         return CreatedAtAction(nameof(GetAll), new { id = p.Id }, p);
     }
 
+    /// <summary>Crea una prenotazione per un periodo (da...a): una riga per giorno</summary>
+    [HttpPost("periodo")]
+    public async Task<IActionResult> CreaPeriodo([FromBody] PrenotazionePeriodoCreateRequest req)
+    {
+        if (req.DataInizio < DateOnly.FromDateTime(DateTime.Today))
+            return BadRequest(new { message = "Non puoi creare una prenotazione per una data già trascorsa." });
+        if (req.FasciaOraria is < 1 or > 3)
+            return BadRequest(new { message = "Fascia oraria non valida." });
+
+        var esito = await _svc.CreaPrenotazionePeriodo(req);
+        if (!esito.Ok)
+            return Conflict(new { message = esito.Messaggio, giorniInConflitto = esito.GiorniInConflitto });
+
+        var risultato = await _svc.ConvertisciPrenotazioniAttive();
+        await NotificaAggiornamento();
+
+        return Ok(new
+        {
+            messaggio = esito.Messaggio,
+            giorniPrenotati = esito.GiorniPrenotati,
+            idPrenotazioni = esito.IdPrenotazioni,
+            assegnataAutomaticamente =
+                esito.IdPrenotazioni.Any(id => risultato.PrenotazioniAssegnate.Contains(id))
+        });
+    }
+
     /// <summary>Elimina prenotazione</summary>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Elimina(int id)

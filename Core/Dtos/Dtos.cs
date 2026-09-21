@@ -1,4 +1,4 @@
-namespace MezziMRS.Core.Dtos;
+﻿namespace MezziMRS.Core.Dtos;
 
 // ── AUTH ──
 public record LoginRequest(string Codice, string? Password = null);
@@ -26,6 +26,8 @@ public record MezzoDto(
     bool TesseriniFerrero,
     string Stato,
     string? UtenteCorrente,
+    string? DataPreso,
+    string? OraPreso,
     bool HasImmagine,
     PrenotazioneSintesiDto? ProssimaPrenotazione,
     int NumeroPrenotazioniAttive
@@ -69,6 +71,7 @@ public record MezzoPresoDto(
 public record StoricoDto(
     int Id,
     int? IdMezzo,
+    int? NumeroAutoMezzo,
     string? DescrizioneMezzo,
     string? Targa,
     int? IdUtente,
@@ -98,6 +101,26 @@ public record PrenotazioneCreateRequest(
     int IdUtente,
     DateOnly Data,
     int FasciaOraria
+);
+
+// Prenotazione di un periodo: crea una riga PrenotazioniMezzi per ogni giorno
+// compreso tra DataInizio e DataFine (estremi inclusi), stessa fascia oraria.
+public record PrenotazionePeriodoCreateRequest(
+    int IdMezzo,
+    int IdUtente,
+    DateOnly DataInizio,
+    DateOnly DataFine,
+    int FasciaOraria
+);
+
+// Esito "tutto o niente": se anche un solo giorno e' gia' occupato non viene
+// creata nessuna prenotazione e GiorniInConflitto elenca le date bloccanti.
+public record PrenotazionePeriodoResult(
+    bool Ok,
+    string Messaggio,
+    int GiorniPrenotati,
+    List<int> IdPrenotazioni,
+    List<string> GiorniInConflitto
 );
 
 // ── UTENTI ──

@@ -16,7 +16,8 @@ export default function StoricoPage() {
   const { showToast, ToastEl } = useToast()
   const [storico, setStorico] = useState([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const [numeroSearch, setNumeroSearch] = useState('')
+  const [utenteSearch, setUtenteSearch] = useState('')
   const [dal, setDal] = useState('')
   const [al, setAl] = useState('')
 
@@ -44,14 +45,10 @@ export default function StoricoPage() {
   }, [])
 
   const filtered = storico.filter(r => {
-    if (search) {
-      const s = search.toLowerCase()
-      const matchText =
-        r.nomeUtente?.toLowerCase().includes(s) ||
-        r.descrizioneMezzo?.toLowerCase().includes(s) ||
-        r.targa?.toLowerCase().includes(s)
-      if (!matchText) return false
-    }
+    const numeroCercato = numeroSearch.trim()
+    const utenteCercato = utenteSearch.trim().toLocaleLowerCase('it')
+    if (numeroCercato && !String(r.numeroAutoMezzo ?? r.idMezzo ?? '').includes(numeroCercato)) return false
+    if (utenteCercato && !r.nomeUtente?.toLocaleLowerCase('it').includes(utenteCercato)) return false
     if (dal) {
       const ymd = toYMD(r.dataPreso)
       const dalYMD = inputToYMD(dal)
@@ -65,8 +62,8 @@ export default function StoricoPage() {
     return true
   })
 
-  const resetFiltri = () => { setDal(''); setAl(''); setSearch('') }
-  const hasFiltri = search || dal || al
+  const resetFiltri = () => { setDal(''); setAl(''); setNumeroSearch(''); setUtenteSearch('') }
+  const hasFiltri = numeroSearch || utenteSearch || dal || al
 
   return (
     <>
@@ -81,7 +78,11 @@ export default function StoricoPage() {
       <div className="fb" style={{flexWrap:'wrap', gap:8}}>
         <div className="sw">
           <svg className="sico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input className="sinput" placeholder="Cerca utente o mezzo..." value={search} onChange={e => setSearch(e.target.value)} />
+          <input className="sinput" inputMode="numeric" aria-label="Filtra per numero del mezzo" placeholder="Numero mezzo..." value={numeroSearch} onChange={e => setNumeroSearch(e.target.value)} />
+        </div>
+        <div className="sw">
+          <svg className="sico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input className="sinput" aria-label="Filtra per nome dell'utilizzatore" placeholder="Nome utilizzatore..." value={utenteSearch} onChange={e => setUtenteSearch(e.target.value)} />
         </div>
         <div style={{display:'flex', alignItems:'center', gap:6, flexWrap:'wrap'}}>
           <span style={{fontSize:12, color:'var(--text3)', whiteSpace:'nowrap'}}>Dal</span>
@@ -131,7 +132,7 @@ export default function StoricoPage() {
             <tbody>
               {filtered.map(r => (
                 <tr key={r.id}>
-                  <td className="m">{r.idMezzo}</td>
+                  <td className="m">{r.numeroAutoMezzo ?? r.idMezzo}</td>
                   <td><strong>{r.descrizioneMezzo}</strong></td>
                   <td>{r.nomeUtente}</td>
                   <td className="m">{r.dataPreso}</td>

@@ -11,6 +11,10 @@ public class MezziService
 {
     private readonly MezziMrsContext _db;
 
+    // Tetto di sicurezza per le prenotazioni "da...a": evita che un errore di
+    // digitazione sulla data generi migliaia di righe in PrenotazioniMezzi.
+    private const int MaxGiorniPrenotazione = 90;
+
     public MezziService(MezziMrsContext db) => _db = db;
 
     // ── HELPER: mezzi attualmente in uso ──
@@ -29,6 +33,30 @@ public class MezziService
         foreach (var riga in righe)
         {
             result[riga.IdMezzo!.Value] = riga.IdUtente!.Value;
+        }
+        return result;
+    }
+
+    // ── HELPER: prese attive complete (utente + data/ora della presa) ──
+    // Usato dalla lista mezzi, che deve mostrare da quando il mezzo e' fuori.
+    // Resta separato da GetMezziInUsoConUtente: quello e' volutamente leggero
+    // perche' lo usa anche la riconciliazione dentro una transazione.
+    private sealed record PresaAttiva(int IdUtente, DateOnly? DataPreso, TimeOnly? OraPreso);
+
+    private async Task<Dictionary<int, PresaAttiva>> GetPreseAttive(
+        CancellationToken cancellationToken = default)
+    {
+        var result = new Dictionary<int, PresaAttiva>();
+        var righe = await _db.MezziPresi
+            .Where(p => p.IdMezzo.HasValue && p.IdUtente.HasValue)
+            .OrderBy(p => p.Id)
+            .Select(p => new { p.IdMezzo, p.IdUtente, p.DataPreso, p.OraPreso })
+            .ToListAsync(cancellationToken);
+
+        foreach (var riga in righe)
+        {
+            result[riga.IdMezzo!.Value] =
+                new PresaAttiva(riga.IdUtente!.Value, riga.DataPreso, riga.OraPreso);
         }
         return result;
     }
@@ -67,7 +95,7 @@ public class MezziService
         var utenti = await _db.Utenti.ToListAsync();
         var fasce = await _db.FasceOrarie.ToListAsync();
         var oggi = DateOnly.FromDateTime(DateTime.Today);
-        var inUso = await GetMezziInUsoConUtente();
+        var prese = await GetPreseAttive();
         var prenotazioni = await _db.PrenotazioniMezzi
             .Where(p => p.Data >= oggi && p.IdMezzo.HasValue)
             .OrderBy(p => p.Data)
@@ -79,14 +107,18 @@ public class MezziService
         {
             string stato;
             string? utenteCorrente = null;
+            string? dataPreso = null;
+            string? oraPreso = null;
             var prenotazioniMezzo = prenotazioni.Where(p => p.IdMezzo == m.Id).ToList();
             var prossima = prenotazioniMezzo.FirstOrDefault();
 
-            if (inUso.TryGetValue(m.Id, out int idU))
+            if (prese.TryGetValue(m.Id, out var presa))
             {
                 stato = "occupied";
-                var u = utenti.FirstOrDefault(u => u.Id == idU);
+                var u = utenti.FirstOrDefault(u => u.Id == presa.IdUtente);
                 utenteCorrente = u != null ? $"{u.Nome?.Trim()} {u.Cognome?.Trim()}" : null;
+                dataPreso = presa.DataPreso?.ToString("dd/MM/yyyy");
+                oraPreso = presa.OraPreso?.ToString("HH:mm");
             }
             else if (prenotazioniMezzo.Any(p => p.Data == oggi))
                 stato = "booked";
@@ -105,6 +137,8 @@ public class MezziService
                 TesseriniFerrero: m.TesseriniFerrero,
                 Stato: stato,
                 UtenteCorrente: utenteCorrente,
+                DataPreso: dataPreso,
+                OraPreso: oraPreso,
                 HasImmagine: m.IDImmagine.HasValue,
                 ProssimaPrenotazione: prossima?.Data is DateOnly dataPrenotazione
                     ? new PrenotazioneSintesiDto(
@@ -395,7 +429,7 @@ public class MezziService
             var mezzo = mezzi.FirstOrDefault(m => m.Id == d.IdMezzo);
             var u = utenti.FirstOrDefault(u => u.Id == d.IdUtente);
             var durata = CalcolaDurata(d);
-            return new StoricoDto(d.Id, d.IdMezzo, mezzo?.Descrizione, mezzo?.Targa, d.IdUtente,
+            return new StoricoDto(d.Id, d.IdMezzo, mezzo?.NumeroAutoMezzo, mezzo?.Descrizione, mezzo?.Targa, d.IdUtente,
                 u != null ? $"{u.Nome?.Trim()} {u.Cognome?.Trim()}" : null,
                 d.DataPreso, d.OraPreso, d.DataDeposito?.ToString("dd/MM/yyyy"),
                 d.OraDepositato?.ToString("HH:mm"), durata);
@@ -430,6 +464,80 @@ public class MezziService
         await _db.SaveChangesAsync();
         return p;
     }
+
+    // Prenotazione di un periodo: una riga per ogni giorno da DataInizio a
+    // DataFine (estremi inclusi), tutte con la stessa fascia oraria.
+    // Strategia "tutto o niente": se anche un solo giorno risulta gia'
+    // prenotato non viene creata nessuna riga, cosi' chi prenota un mezzo per
+    // una trasferta non si ritrova con il periodo bucato.
+    public async Task<PrenotazionePeriodoResult> CreaPrenotazionePeriodo(
+        PrenotazionePeriodoCreateRequest req)
+    {
+        if (req.DataFine < req.DataInizio)
+            return new PrenotazionePeriodoResult(
+                false, "La data di fine non puo' precedere quella di inizio.", 0, [], []);
+
+        var giorni = req.DataFine.DayNumber - req.DataInizio.DayNumber + 1;
+        if (giorni > MaxGiorniPrenotazione)
+            return new PrenotazionePeriodoResult(
+                false, $"Il periodo non puo' superare {MaxGiorniPrenotazione} giorni.", 0, [], []);
+
+        await using var transaction =
+            await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        var esistenti = await _db.PrenotazioniMezzi
+            .Where(p => p.IdMezzo == req.IdMezzo
+                     && p.Data >= req.DataInizio
+                     && p.Data <= req.DataFine)
+            .ToListAsync();
+
+        var conflitti = esistenti
+            .Where(p => p.Data.HasValue && FasceInConflitto(p.FasciaOraria, req.FasciaOraria))
+            .Select(p => p.Data!.Value)
+            .Distinct()
+            .OrderBy(d => d)
+            .Select(d => d.ToString("dd/MM/yyyy"))
+            .ToList();
+
+        if (conflitti.Count > 0)
+        {
+            await transaction.RollbackAsync();
+            var elenco = string.Join(", ", conflitti.Take(5));
+            if (conflitti.Count > 5) elenco += $" (+{conflitti.Count - 5} altri)";
+            return new PrenotazionePeriodoResult(
+                false,
+                $"Mezzo gia' prenotato in questi giorni: {elenco}. Nessuna prenotazione creata.",
+                0, [], conflitti);
+        }
+
+        var nuove = new List<PrenotazioneMezzo>();
+        for (var data = req.DataInizio; data <= req.DataFine; data = data.AddDays(1))
+        {
+            var p = new PrenotazioneMezzo
+            {
+                IdMezzo = req.IdMezzo, IdUtente = req.IdUtente,
+                Data = data, FasciaOraria = req.FasciaOraria
+            };
+            _db.PrenotazioniMezzi.Add(p);
+            nuove.Add(p);
+        }
+
+        await _db.SaveChangesAsync();
+        await transaction.CommitAsync();
+
+        var messaggio = giorni == 1
+            ? "Prenotazione creata!"
+            : $"Prenotazione creata per {giorni} giorni, " +
+              $"dal {req.DataInizio:dd/MM/yyyy} al {req.DataFine:dd/MM/yyyy}.";
+
+        return new PrenotazionePeriodoResult(
+            true, messaggio, giorni, nuove.Select(p => p.Id).ToList(), []);
+    }
+
+    // Due fasce si sovrappongono se sono la stessa oppure se una delle due
+    // copre tutto il giorno (3). FasciaOraria: 1=Mattino, 2=Pomeriggio, 3=Tutto il giorno.
+    private static bool FasceInConflitto(int? esistente, int richiesta)
+        => esistente is null || esistente == 3 || richiesta == 3 || esistente == richiesta;
 
     public async Task<bool> EliminaPrenotazione(int id)
     {

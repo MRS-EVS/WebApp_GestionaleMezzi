@@ -17,7 +17,10 @@ export default function LoginForm({ onSuccess }) {
   // Carica la lista utenti all'avvio
   useEffect(() => {
     getUtentiLogin()
-      .then(r => setUtenti([...r.data].sort((a, b) => `${a.nome} ${a.cognome}`.localeCompare(`${b.nome} ${b.cognome}`, 'it'))))
+      // Ordinati per cognome (poi nome), come la lista utenti del gestionale
+      .then(r => setUtenti([...r.data].sort((a, b) =>
+        `${a.cognome} ${a.nome}`.localeCompare(`${b.cognome} ${b.nome}`, 'it')
+      )))
       .catch(() => {}) // se fallisce, l'utente inserisce codice manualmente
       .finally(() => setLoadingUtenti(false))
   }, [])
@@ -76,7 +79,7 @@ export default function LoginForm({ onSuccess }) {
             <option value="">— Seleziona il tuo nome —</option>
             {utenti.map(u => (
               <option key={u.id} value={u.id}>
-                {u.nome} {u.cognome}
+                {u.cognome} {u.nome}
               </option>
             ))}
           </select>

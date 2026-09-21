@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getManutenzioni, creaManutenzione, getMezzi, getTipiManutenzione } from '../api/client'
 import { useToast } from '../hooks/useToast'
+import DateField from '../components/DateField'
 
 export default function ManutenzioniPage() {
   const { showToast, ToastEl } = useToast()
@@ -94,7 +95,7 @@ export default function ManutenzioniPage() {
               </div>
               <div className="mf">
                 <label>Data intervento</label>
-                <input type="date" className="mi" value={form.dataIntervento} onChange={e => setForm(f => ({...f, dataIntervento: e.target.value}))} />
+                <DateField value={form.dataIntervento} onChange={valore => setForm(f => ({...f, dataIntervento: valore}))} />
               </div>
               <div className="mf">
                 <label>Tipo manutenzione</label>

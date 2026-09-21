@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getMezzi, getDashboard, prendiMezzo, depositaMezzo, creaPrenotazione, getFasceOrarie, getFotoUrl } from '../api/client'
+import { getMezzi, getDashboard, prendiMezzo, depositaMezzo, creaPrenotazionePeriodo, getFasceOrarie, getFotoUrl } from '../api/client'
 import { useToast } from '../hooks/useToast'
 import { useMezziRealtime } from '../hooks/useMezziRealtime'
+import DateField from '../components/DateField'
 
 const SL = { free: 'Libero', occupied: 'In uso', booked: 'Prenotato' }
 
@@ -10,6 +11,15 @@ const formatBookingDate = (value) => {
   if (!value) return ''
   const [year, month, day] = value.split('-')
   return year && month && day ? `${day}/${month}/${year}` : value
+}
+
+// Numero di giorni del periodo, estremi inclusi (0 se il periodo non e' valido)
+const giorniPeriodo = (dal, al) => {
+  if (!dal || !al) return 0
+  const diff = Math.round(
+    (new Date(`${al}T00:00:00`) - new Date(`${dal}T00:00:00`)) / 86400000
+  ) + 1
+  return diff > 0 ? diff : 0
 }
 
 const bookingDescription = (booking) => [
@@ -31,7 +41,7 @@ export default function HomePage() {
   const [modal, setModal] = useState(null) // { mezzo, action: 'detail'|'prenota' }
   const [confirm, setConfirm] = useState(null) // { action: 'prendi'|'deposita', mezzo }
   const [fasceOrarie, setFasceOrarie] = useState([])
-  const [prenotaForm, setPrenotaForm] = useState({ data: '', fasciaOraria: '' })
+  const [prenotaForm, setPrenotaForm] = useState({ dataInizio: '', dataFine: '', fasciaOraria: '' })
   const [actionLoading, setActionLoading] = useState(false)
 
   const load = useCallback(async () => {
@@ -114,30 +124,39 @@ export default function HomePage() {
   }
 
   const handlePrenota = async () => {
-    if (!prenotaForm.data || !prenotaForm.fasciaOraria) {
-      showToast('Compila data e fascia oraria', 'error'); return
+    const { dataInizio, dataFine, fasciaOraria } = prenotaForm
+    if (!dataInizio || !dataFine || !fasciaOraria) {
+      showToast('Compila il periodo e la fascia oraria', 'error'); return
+    }
+    if (dataFine < dataInizio) {
+      showToast('La data di fine non può precedere quella di inizio', 'error'); return
+    }
+    if (dataInizio < today) {
+      showToast('Non puoi prenotare per una data già trascorsa', 'error'); return
     }
     const u = await requireAuth(`Accedi per prenotare ${modal.mezzo.descrizione}`)
     if (!u) return
     setActionLoading(true)
     try {
-      const res = await creaPrenotazione({
+      const res = await creaPrenotazionePeriodo({
         idMezzo: modal.mezzo.id,
         idUtente: u.id || getUserId(),
-        data: prenotaForm.data,
-        fasciaOraria: parseInt(prenotaForm.fasciaOraria)
+        dataInizio,
+        dataFine,
+        fasciaOraria: parseInt(fasciaOraria)
       })
       showToast(
         res.data?.assegnataAutomaticamente
           ? 'Prenotazione di oggi assegnata: il mezzo è ora in uso a tuo nome.'
-          : 'Prenotazione creata!',
-        'success'
+          : res.data?.messaggio || 'Prenotazione creata!',
+        'success', 6000
       )
       setModal(null)
-      setPrenotaForm({ data: '', fasciaOraria: '' })
+      setPrenotaForm({ dataInizio: '', dataFine: '', fasciaOraria: '' })
       await load()
     } catch (err) {
-      showToast(err.response?.data?.message || 'Errore nella prenotazione', 'error')
+      // Con la regola "tutto o niente" il messaggio elenca i giorni in conflitto
+      showToast(err.response?.data?.message || 'Errore nella prenotazione', 'error', 7000)
     } finally {
       setActionLoading(false)
     }
@@ -154,7 +173,7 @@ export default function HomePage() {
   const apriPrenota = async (m) => {
     const u = await requireAuth(`Accedi per prenotare ${m.descrizione}`)
     if (!u) return
-    setPrenotaForm({ data: today, fasciaOraria: '' })
+    setPrenotaForm({ dataInizio: today, dataFine: today, fasciaOraria: '' })
     setModal({ mezzo: m, action: 'prenota' })
   }
 
@@ -169,6 +188,7 @@ export default function HomePage() {
   }
 
   const today = new Date().toISOString().split('T')[0]
+  const giorni = giorniPeriodo(prenotaForm.dataInizio, prenotaForm.dataFine)
 
   return (
     <>
@@ -247,7 +267,7 @@ export default function HomePage() {
               <div key={m.id} className={`vc ${m.stato}`} style={{animationDelay: `${i * 0.04}s`}} onClick={() => setModal({ mezzo: m, action: 'detail' })}>
                 <div className="viw">
                   <div className="vib" style={m.hasImmagine ? {backgroundImage:`url(${getFotoUrl(m.id)})`} : {}} />
-                  <span className="vnum">#{m.numeroAutoMezzo ?? m.id}</span>
+                  <span className="vnum">{m.numeroAutoMezzo ?? m.id}</span>
                   <span className={`vst ${m.stato}`}>{SL[m.stato]}</span>
                   <div className="vplate">{m.targa}</div>
                 </div>
@@ -264,6 +284,12 @@ export default function HomePage() {
                     ? <div className="vuser">→ <strong>{m.utenteCorrente}</strong></div>
                     : <div className="vavail">✓ Disponibile</div>
                   }
+                  {m.stato === 'occupied' && m.dataPreso && (
+                    <div className="vtaken" title={`Preso il ${m.dataPreso} alle ${m.oraPreso}`}>
+                      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 2"/></svg>
+                      <span>Preso il <strong>{m.dataPreso}</strong> alle <strong>{m.oraPreso}</strong></span>
+                    </div>
+                  )}
                   {m.prossimaPrenotazione && (
                     <div className="vbooking" title={`Prenotato: ${bookingDescription(m.prossimaPrenotazione)}`}>
                       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
@@ -309,10 +335,15 @@ export default function HomePage() {
               <div key={m.id} className={`vrow ${m.stato}`} style={{animationDelay: `${i * 0.03}s`}} onClick={() => setModal({ mezzo: m, action: 'detail' })}>
                 <div className="vri" style={m.hasImmagine ? {backgroundImage:`url(${getFotoUrl(m.id)})`} : {}} />
                 <div className="vrc">
-                  <span className="vrn">#{m.numeroAutoMezzo ?? m.id}</span>
+                  <span className="vrn">{m.numeroAutoMezzo ?? m.id}</span>
                   <span className="vrname">{m.descrizione}</span>
                   <span className="vrp">{m.targa}</span>
                   <span className="vru">{m.utenteCorrente || '—'}</span>
+                  {m.stato === 'occupied' && m.dataPreso && (
+                    <span className="vrtaken" title={`Preso il ${m.dataPreso} alle ${m.oraPreso}`}>
+                      ◴ {m.dataPreso} {m.oraPreso}
+                    </span>
+                  )}
                   {m.prossimaPrenotazione && (
                     <span className="vrbooking" title={`Prenotato: ${bookingDescription(m.prossimaPrenotazione)}`}>
                       ◷ {formatBookingDate(m.prossimaPrenotazione.data)}
@@ -354,7 +385,7 @@ export default function HomePage() {
             <div className="mhero">
               <div className="mhero-img" style={modal.mezzo.hasImmagine ? {backgroundImage:`url(${getFotoUrl(modal.mezzo.id)})`} : {}} />
               <div className="mhero-overlay" />
-              <span className="mhero-num">#{modal.mezzo.numeroAutoMezzo ?? modal.mezzo.id}</span>
+              <span className="mhero-num">{modal.mezzo.numeroAutoMezzo ?? modal.mezzo.id}</span>
               <span className={`vst ${modal.mezzo.stato}`}>{SL[modal.mezzo.stato]}</span>
               <div className="mhero-bottom">
                 <div className="mhero-name">{modal.mezzo.descrizione}</div>
@@ -377,7 +408,16 @@ export default function HomePage() {
               {modal.mezzo.utenteCorrente && (
                 <div className="mf">
                   <label>Attualmente con</label>
-                  <div className="v" style={{color:'var(--accent)',fontWeight:600}}>{modal.mezzo.utenteCorrente}</div>
+                  <div className="v mcurrent-user">{modal.mezzo.utenteCorrente}</div>
+                </div>
+              )}
+              {modal.mezzo.stato === 'occupied' && modal.mezzo.dataPreso && (
+                <div className="mtaken">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 2"/></svg>
+                  <div>
+                    <label>Preso il</label>
+                    <strong>{modal.mezzo.dataPreso}<span>alle</span>{modal.mezzo.oraPreso}</strong>
+                  </div>
                 </div>
               )}
               {modal.mezzo.prossimaPrenotazione && (
@@ -463,10 +503,35 @@ export default function HomePage() {
             <button className="mcl" onClick={() => setModal(null)}>✕</button>
             <div className="mt">Prenota — {modal.mezzo.descrizione}</div>
             <div style={{display:'flex',flexDirection:'column',gap:14}}>
-              <div className="mf">
-                <label>Data</label>
-                <input type="date" className="mi" min={today} value={prenotaForm.data} onChange={e => setPrenotaForm(p => ({...p, data: e.target.value}))} />
+              <div className="mrange">
+                <div className="mf">
+                  <label>Dal giorno</label>
+                  <DateField
+                    min={today}
+                    value={prenotaForm.dataInizio}
+                    onChange={valore => setPrenotaForm(p => ({
+                      ...p,
+                      dataInizio: valore,
+                      // Trascina anche la fine se resterebbe prima dell'inizio
+                      dataFine: !p.dataFine || p.dataFine < valore ? valore : p.dataFine
+                    }))}
+                  />
+                </div>
+                <div className="mf">
+                  <label>Al giorno</label>
+                  <DateField
+                    min={prenotaForm.dataInizio || today}
+                    value={prenotaForm.dataFine}
+                    onChange={valore => setPrenotaForm(p => ({...p, dataFine: valore}))}
+                  />
+                </div>
               </div>
+              {giorni > 0 && (
+                <div className="mrange-hint">
+                  {giorni === 1 ? '1 giorno' : `${giorni} giorni`}
+                  {giorni > 1 && ' · stessa fascia oraria per tutto il periodo'}
+                </div>
+              )}
               <div className="mf">
                 <label>Fascia oraria</label>
                 <select className="mi" value={prenotaForm.fasciaOraria} onChange={e => setPrenotaForm(p => ({...p, fasciaOraria: e.target.value}))}>
@@ -477,7 +542,7 @@ export default function HomePage() {
             </div>
             <div className="mac">
               <button className="btn btng" onClick={() => setModal(null)}>Annulla</button>
-              <button className="btn btnp" onClick={handlePrenota} disabled={actionLoading || !prenotaForm.data || !prenotaForm.fasciaOraria}>
+              <button className="btn btnp" onClick={handlePrenota} disabled={actionLoading || giorni === 0 || !prenotaForm.fasciaOraria}>
                 {actionLoading ? 'Salvataggio...' : 'Conferma prenotazione'}
               </button>
             </div>

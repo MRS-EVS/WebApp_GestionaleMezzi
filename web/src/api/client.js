@@ -73,6 +73,11 @@ export const getPrenotazioni = (da) =>
 export const creaPrenotazione = (data) =>
   api.post('/api/prenotazioni', data)
 
+// Prenotazione di un periodo: { idMezzo, idUtente, dataInizio, dataFine, fasciaOraria }
+// Il backend crea una riga per ogni giorno del periodo, o nessuna se c'e' conflitto.
+export const creaPrenotazionePeriodo = (data) =>
+  api.post('/api/prenotazioni/periodo', data)
+
 export const eliminaPrenotazione = (id) =>
   api.delete(`/api/prenotazioni/${id}`)
 
