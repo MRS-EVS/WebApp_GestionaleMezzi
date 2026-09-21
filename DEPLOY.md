@@ -8,7 +8,7 @@ server).
 
 | | |
 |---|---|
-| PC di sviluppo | `C:\_MRS\GestioneMezzi\GestionaleMezzi_Web` |
+| PC di sviluppo | `C:\_MRS\Gestione Mezzi\GestionaleMezzi_Web` |
 | PC server (produzione) | `C:\WebApp_GestionaleMezzi` |
 | Nome servizio Windows | `GestionaleMezzi` (visualizzato: *Gestionale Mezzi*) |
 | Indirizzo in produzione | `http://IP-SERVER:5000` |
@@ -27,7 +27,7 @@ web e il **runtime .NET incluso**. Sul server non serve installare nulla (né
 - Node.js 18+
 - La prima volta, installa le dipendenze del frontend:
   ```powershell
-  cd "C:\_MRS\GestioneMezzi\GestionaleMezzi_Web\web"
+  cd "C:\_MRS\Gestione Mezzi\GestionaleMezzi_Web\web"
   npm install
   ```
 
@@ -37,7 +37,7 @@ web e il **runtime .NET incluso**. Sul server non serve installare nulla (né
 > compilata: se salti questo passo, pubblichi l'interfaccia vecchia.
 
 ```powershell
-cd "C:\_MRS\GestioneMezzi\GestionaleMezzi_Web\web"
+cd "C:\_MRS\Gestione Mezzi\GestionaleMezzi_Web\web"
 npm run build
 ```
 Il risultato finisce in `Api\wwwroot\`.
@@ -50,9 +50,16 @@ Il risultato finisce in `Api\wwwroot\`.
 > ```
 
 ```powershell
-cd "C:\_MRS\GestioneMezzi\GestionaleMezzi_Web\Api"
-dotnet publish -c Release -r win-x64 --self-contained true -o publish
+cd "C:\_MRS\Gestione Mezzi\GestionaleMezzi_Web\Api"
+dotnet publish MezziMRS.Api.csproj -c Release -r win-x64 --self-contained true -o publish
 ```
+
+> ⚠️ **Indica sempre `MezziMRS.Api.csproj`.** Nella stessa cartella c'è anche
+> `MezziMRS.Api.sln`: senza il nome del progetto `dotnet publish` prende la
+> solution, `--output` su una solution non è supportato (warning NETSDK1194) e
+> il risultato finisce annidato in `publish\publish\publish` con un errore
+> MSB3030. Se è già successo, cancella la cartella `publish` e rilancia il
+> comando corretto: è tutto output rigenerabile, non committato.
 
 Al termine la cartella `publish` contiene:
 
@@ -66,7 +73,7 @@ Al termine la cartella `publish` contiene:
 
 ## A4. Collaudo locale (consigliato)
 ```powershell
-Start-Process "C:\_MRS\GestioneMezzi\GestionaleMezzi_Web\Api\publish\GestionaleMezzi.exe"
+Start-Process "C:\_MRS\Gestione Mezzi\GestionaleMezzi_Web\Api\publish\GestionaleMezzi.exe"
 ```
 Apri `http://localhost:5000`, controlla che tutto funzioni (parco mezzi, login,
 prendi/restituisci), poi chiudi:
