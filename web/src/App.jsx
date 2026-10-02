@@ -56,6 +56,9 @@ function Layout() {
 
   return (
     <div className="app-layout">
+      {/* Da tastiera servivano fino a 8 tab per superare la navigazione
+          su ogni pagina: questo link compare al primo tab e la salta. */}
+      <a href="#contenuto" className="skip-link">Salta al contenuto</a>
       <header className="topbar">
         <div className="brand">
           <img src={logo} alt="MRS" className="brand-logo" />
@@ -115,7 +118,7 @@ function Layout() {
           )}
         </div>
       </header>
-      <main className="main">
+      <main className="main" id="contenuto" tabIndex={-1}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/prenotazioni" element={<PrenotazioniPage />} />
